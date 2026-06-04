@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String?   @unique
+  name      String?
+  accounts  Account[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Account {
+  id            String         @id @default(cuid())
+  userId        String         @map("user_id")
+  provider      String
+  providerEmail String?        @map("provider_email")
+  lastHistoryId String?        @map("last_history_id")
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  oauthTokens   OAuthToken[]
+  emails        Email[]
+  calendarEvents CalendarEvent[]
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  @@unique([provider, providerEmail])
+  @@map("accounts")
+}
+
+model OAuthToken {
+  id                    String   @id @default(cuid())
+  accountId             String   @map("account_id")
+  accessTokenCiphertext  String?  @map("access_token_ciphertext")
+  refreshTokenCiphertext String?  @map("refresh_token_ciphertext")
+  expiresAt             DateTime? @map("expires_at")
+  scope                 String?
+  account               Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@map("oauth_tokens")
+}
+
+model Email {
+  id          String       @id
+  accountId   String       @map("account_id")
+  threadId    String?      @map("thread_id")
+  subject     String?
+  fromAddress String?      @map("from_address")
+  toAddresses String[]     @default([]) @map("to_addresses")
+  receivedAt  DateTime?    @map("received_at")
+  snippet     String?
+  labels      String[]     @default([])
+  account     Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  body        EmailBody?
+  attachments Attachment[]
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@index([accountId, receivedAt])
+  @@map("emails")
+}
+
+model EmailBody {
+  emailId   String   @id @map("email_id")
+  textBody  String?  @map("text_body")
+  htmlBody  String?  @map("html_body")
+  email     Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("email_bodies")
+}
+
+model Attachment {
+  id          String   @id @default(cuid())
+  emailId     String   @map("email_id")
+  filename    String?
+  mimeType    String?  @map("mime_type")
+  sizeBytes   Int?     @map("size_bytes")
+  googlePartId String? @map("google_part_id")
+  email       Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("attachments")
+}
+
+model DashboardWidget {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  widgetKey String   @map("widget_key")
+  enabled   Boolean  @default(true)
+  position  Int      @default(0)
+  settings  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, widgetKey])
+  @@map("dashboard_widgets")
+}
+
+model JobApplication {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  company     String
+  role        String?
+  status      String
+  appliedAt   DateTime? @map("applied_at")
+  sourceEmailId String? @map("source_email_id")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([userId, status])
+  @@map("job_applications")
+}
+
+model AiInsight {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  kind      String
+  title     String
+  body      String
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId, kind])
+  @@map("ai_insights")
+}
+
+model CalendarEvent {
+  id          String   @id
+  accountId   String   @map("account_id")
+  summary     String?
+  description String?
+  startAt     DateTime? @map("start_at")
+  endAt       DateTime? @map("end_at")
+  attendees   String[]  @default([])
+  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([accountId, startAt])
+  @@map("calendar_events")
+}
