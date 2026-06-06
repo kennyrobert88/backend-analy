@@ -1,10 +1,20 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 import { AuthService } from './auth.service.js';
+
+const callbackQuerySchema = z.object({
+  code: z.string().optional(),
+  error: z.string().optional(),
+  state: z.string().optional()
+});
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   const service = new AuthService(app.config);
 
-  app.get('/google/start', async (_request, reply) => {
+  // Tighter rate limit for auth endpoints: 10 req/min per IP.
+  const authRateLimit = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } };
+
+  app.get('/google/start', { ...authRateLimit }, async (_request, reply) => {
     if (!service.isConfigured()) {
       return reply.status(503).send({
         error: 'GoogleOAuthNotConfigured',
@@ -15,8 +25,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     return service.buildGoogleConsentUrl();
   });
 
-  app.get('/google/callback', async (request, reply) => {
-    const query = request.query as { code?: string; error?: string };
+  app.get('/google/callback', { ...authRateLimit }, async (request, reply) => {
+    const query = callbackQuerySchema.parse(request.query);
 
     if (query.error) {
       return reply.status(400).send({ error: 'GoogleOAuthError', message: query.error });
@@ -24,6 +34,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
     if (!query.code) {
       return reply.status(400).send({ error: 'MissingOAuthCode', message: 'OAuth callback requires a code.' });
+    }
+
+    if (!query.state || !service.consumeState(query.state)) {
+      return reply.status(400).send({ error: 'InvalidOAuthState', message: 'OAuth state is missing, invalid, or expired.' });
     }
 
     return reply.status(501).send({

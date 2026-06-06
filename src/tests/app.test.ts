@@ -8,7 +8,8 @@ const testConfig = loadConfig({
   HOST: '127.0.0.1',
   API_BASE_URL: 'http://localhost:4000',
   ALLOWED_ORIGINS: 'http://localhost:3000',
-  GOOGLE_OAUTH_REDIRECT_URI: 'http://localhost:4000/auth/google/callback'
+  GOOGLE_OAUTH_REDIRECT_URI: 'http://localhost:4000/auth/google/callback',
+  SESSION_COOKIE_SECRET: 'test-secret-long-enough-for-cookie-signing'
 });
 
 describe('backend-analy app', () => {
@@ -24,19 +25,15 @@ describe('backend-analy app', () => {
     });
   });
 
-  it('reports readiness checks in test mode', async () => {
+  it('reports readiness in test mode without leaking config details', async () => {
     const app = await createApp({ config: testConfig });
 
     const response = await app.inject({ method: 'GET', url: '/readyz' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      status: 'ready',
-      checks: {
-        databaseConfigured: false,
-        googleOAuthConfigured: false
-      }
-    });
+    expect(response.json()).toEqual({ status: 'ready' });
+    // Must not expose which secrets are configured.
+    expect(response.json()).not.toHaveProperty('checks');
   });
 
   it('blocks OAuth start until Google credentials are configured', async () => {
@@ -50,13 +47,27 @@ describe('backend-analy app', () => {
     });
   });
 
-  it('exposes planned API route stubs', async () => {
+  it('rejects unauthenticated requests to protected routes', async () => {
     const app = await createApp({ config: testConfig });
 
     const [emails, sync, events] = await Promise.all([
       app.inject({ method: 'GET', url: '/emails' }),
       app.inject({ method: 'GET', url: '/sync/status' }),
       app.inject({ method: 'GET', url: '/calendar/events' })
+    ]);
+
+    expect(emails.statusCode).toBe(401);
+    expect(sync.statusCode).toBe(401);
+    expect(events.statusCode).toBe(401);
+  });
+
+  it('allows authenticated requests to protected routes', async () => {
+    const app = await createApp({ config: testConfig });
+
+    const [emails, sync, events] = await Promise.all([
+      app.inject({ method: 'GET', url: '/emails', cookies: { session_user_id: 'user-123' } }),
+      app.inject({ method: 'GET', url: '/sync/status', cookies: { session_user_id: 'user-123' } }),
+      app.inject({ method: 'GET', url: '/calendar/events', cookies: { session_user_id: 'user-123' } })
     ]);
 
     expect(emails.statusCode).toBe(200);

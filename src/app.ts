@@ -1,8 +1,11 @@
+import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { appConfig, hasProductionSecrets, type AppConfig } from './config/index.js';
+import { registerAuthGuard } from './middleware/auth-guard.js';
 import { registerErrorHandler } from './middleware/error-handler.js';
 import { registerRequestLogger } from './middleware/request-logger.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
@@ -23,17 +26,29 @@ type CreateAppOptions = {
   config?: AppConfig;
 };
 
+// Only allow alphanumeric, hyphens, and underscores in client-supplied request IDs.
+const REQUEST_ID_SAFE = /^[a-zA-Z0-9_-]{1,128}$/;
+
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const config = options.config ?? appConfig;
   const app = Fastify({
     logger: config.NODE_ENV === 'test' ? false : { level: 'info' },
-    genReqId: (request) => request.headers['x-request-id']?.toString() ?? randomUUID()
+    genReqId: (request) => {
+      const clientId = request.headers['x-request-id']?.toString();
+      return clientId && REQUEST_ID_SAFE.test(clientId) ? clientId : randomUUID();
+    }
   });
 
   app.decorate('config', config);
 
   await registerErrorHandler(app);
   await registerRequestLogger(app);
+
+  await app.register(helmet);
+
+  await app.register(cookie, {
+    secret: config.SESSION_COOKIE_SECRET ?? randomUUID()
+  });
 
   await app.register(cors, {
     origin: (origin, callback) => {
@@ -57,27 +72,24 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   }));
 
   app.get('/readyz', async (_request, reply) => {
-    const checks = {
-      databaseConfigured: Boolean(config.DATABASE_URL),
-      googleOAuthConfigured: Boolean(config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET),
-      sessionSecretConfigured: Boolean(config.SESSION_COOKIE_SECRET),
-      tokenEncryptionConfigured: Boolean(config.TOKEN_ENCRYPTION_KEY)
-    };
     const ready = config.NODE_ENV === 'production' ? hasProductionSecrets(config) : true;
-
-    return reply.status(ready ? 200 : 503).send({
-      status: ready ? 'ready' : 'not_ready',
-      checks
-    });
+    return reply.status(ready ? 200 : 503).send({ status: ready ? 'ready' : 'not_ready' });
   });
 
+  // Auth routes are public (no auth guard).
   await app.register(authRoutes, { prefix: '/auth' });
-  await app.register(syncRoutes, { prefix: '/sync' });
-  await app.register(emailRoutes, { prefix: '/emails' });
-  await app.register(calendarRoutes, { prefix: '/calendar' });
-  await app.register(dashboardRoutes, { prefix: '/dashboard' });
-  await app.register(jobApplicationRoutes, { prefix: '/job-applications' });
-  await app.register(insightRoutes, { prefix: '/insights' });
+
+  // All remaining routes require authentication.
+  await app.register(async (protectedApp) => {
+    await registerAuthGuard(protectedApp);
+
+    await protectedApp.register(syncRoutes, { prefix: '/sync' });
+    await protectedApp.register(emailRoutes, { prefix: '/emails' });
+    await protectedApp.register(calendarRoutes, { prefix: '/calendar' });
+    await protectedApp.register(dashboardRoutes, { prefix: '/dashboard' });
+    await protectedApp.register(jobApplicationRoutes, { prefix: '/job-applications' });
+    await protectedApp.register(insightRoutes, { prefix: '/insights' });
+  });
 
   return app;
 }

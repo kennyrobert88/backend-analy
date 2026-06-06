@@ -13,7 +13,9 @@
     "prisma:generate": "prisma generate"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^10.0.1",
+    "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.2.2",
     "@prisma/client": "^6.2.1",
     "dotenv": "^16.4.7",

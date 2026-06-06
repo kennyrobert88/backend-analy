@@ -4,6 +4,17 @@ import { hasGoogleCredentials } from '../../config/index.js';
 
 const googleOAuthEndpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
 
+// State tokens are single-use and expire after 10 minutes.
+const pendingStates = new Map<string, number>();
+const STATE_TTL_MS = 10 * 60 * 1000;
+
+function pruneExpiredStates(): void {
+  const now = Date.now();
+  for (const [state, expiresAt] of pendingStates) {
+    if (now > expiresAt) pendingStates.delete(state);
+  }
+}
+
 export class AuthService {
   constructor(private readonly config: AppConfig) {}
 
@@ -16,7 +27,10 @@ export class AuthService {
       throw new Error('Google OAuth client ID is not configured');
     }
 
+    pruneExpiredStates();
     const state = randomBytes(24).toString('base64url');
+    pendingStates.set(state, Date.now() + STATE_TTL_MS);
+
     const params = new URLSearchParams({
       client_id: this.config.GOOGLE_CLIENT_ID,
       redirect_uri: this.config.GOOGLE_OAUTH_REDIRECT_URI,
@@ -37,5 +51,13 @@ export class AuthService {
       consentUrl: `${googleOAuthEndpoint}?${params.toString()}`,
       state
     };
+  }
+
+  // Validates and consumes the state token (single-use).
+  consumeState(state: string): boolean {
+    pruneExpiredStates();
+    if (!pendingStates.has(state)) return false;
+    pendingStates.delete(state);
+    return true;
   }
 }

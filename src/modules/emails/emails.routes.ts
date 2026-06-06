@@ -1,4 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
+
+const searchQuerySchema = z.object({ q: z.string().max(500).optional() });
+const dailyVolumeQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(30)
+});
+const emailIdSchema = z.object({ id: z.string().min(1).max(255) });
 
 export const emailRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', async () => ({
@@ -9,13 +16,8 @@ export const emailRoutes: FastifyPluginAsync = async (app) => {
   }));
 
   app.get('/search', async (request) => {
-    const query = request.query as { q?: string };
-
-    return {
-      query: query.q ?? '',
-      data: [],
-      total: 0
-    };
+    const { q } = searchQuerySchema.parse(request.query);
+    return { query: q ?? '', data: [], total: 0 };
   });
 
   app.get('/stats', async () => ({
@@ -25,38 +27,21 @@ export const emailRoutes: FastifyPluginAsync = async (app) => {
   }));
 
   app.get('/daily-volume', async (request) => {
-    const query = request.query as { days?: string };
-    const days = query.days ? Number(query.days) : 30;
-
-    return {
-      days,
-      data: []
-    };
+    const { days } = dailyVolumeQuerySchema.parse(request.query);
+    return { days, data: [] };
   });
 
-  app.get('/senders', async () => ({
-    data: []
-  }));
+  app.get('/senders', async () => ({ data: [] }));
 
-  app.get('/hourly-distribution', async () => ({
-    data: []
-  }));
+  app.get('/hourly-distribution', async () => ({ data: [] }));
 
   app.get('/:id/thread', async (request) => {
-    const params = request.params as { id: string };
-
-    return {
-      emailId: params.id,
-      thread: []
-    };
+    const { id } = emailIdSchema.parse(request.params);
+    return { emailId: id, thread: [] };
   });
 
   app.get('/:id', async (request, reply) => {
-    const params = request.params as { id: string };
-
-    return reply.status(404).send({
-      error: 'EmailNotFound',
-      message: `Email ${params.id} was not found.`
-    });
+    const { id } = emailIdSchema.parse(request.params);
+    return reply.status(404).send({ error: 'EmailNotFound', message: `Email ${id} was not found.` });
   });
 };
