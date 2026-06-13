@@ -15,7 +15,9 @@
     "migrate:deploy": "prisma migrate deploy --schema db/schema.prisma",
     "prisma:generate": "prisma generate --schema db/schema.prisma",
     "gen-encryption-key": "node -e \"console.log('TOKEN_ENCRYPTION_KEY='+require('crypto').randomBytes(32).toString('base64'))\"",
-    "gen-cookie-secret": "node -e \"console.log('SESSION_COOKIE_SECRET='+require('crypto').randomBytes(48).toString('base64'))\""
+    "gen-cookie-secret": "node -e \"console.log('SESSION_COOKIE_SECRET='+require('crypto').randomBytes(48).toString('base64'))\"",
+    "pretest": "npm run prisma:generate",
+    "prebuild": "npm run prisma:generate"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

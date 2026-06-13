@@ -1,4 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../modules/users/users.repository.js', () => ({
+  findUserById: vi.fn(async (userId: string) => ({ id: userId, email: 'test@example.com' })),
+  findAccountByUserId: vi.fn(async () => ({ id: 'account-123', providerEmail: 'test@example.com', lastHistoryId: null })),
+  upsertGoogleAccount: vi.fn()
+}));
+
+vi.mock('../modules/emails/emails.repository.js', () => ({
+  findEmails: vi.fn(async () => ({ data: [], page: 1, pageSize: 25, total: 0 })),
+  findEmailById: vi.fn(),
+  findEmailsByThreadId: vi.fn(),
+  searchEmails: vi.fn(),
+  getEmailStats: vi.fn(),
+  getDailyVolume: vi.fn(),
+  getTopSenders: vi.fn(),
+  getHourlyDistribution: vi.fn()
+}));
+
+vi.mock('../modules/calendar/calendar.service.js', () => ({
+  getCalendarEvents: vi.fn(async () => []),
+  getCalendarEmailCorrelation: vi.fn(),
+  syncCalendar: vi.fn()
+}));
 import { createApp } from '../app.js';
 import { loadConfig } from '../config/index.js';
 
@@ -64,10 +87,12 @@ describe('backend-analy app', () => {
   it('allows authenticated requests to protected routes', async () => {
     const app = await createApp({ config: testConfig });
 
+    const sessionCookie = app.signCookie('user-123');
+
     const [emails, sync, events] = await Promise.all([
-      app.inject({ method: 'GET', url: '/emails', cookies: { session_user_id: 'user-123' } }),
-      app.inject({ method: 'GET', url: '/sync/status', cookies: { session_user_id: 'user-123' } }),
-      app.inject({ method: 'GET', url: '/calendar/events', cookies: { session_user_id: 'user-123' } })
+      app.inject({ method: 'GET', url: '/emails', cookies: { session_user_id: sessionCookie } }),
+      app.inject({ method: 'GET', url: '/sync/status', cookies: { session_user_id: sessionCookie } }),
+      app.inject({ method: 'GET', url: '/calendar/events', cookies: { session_user_id: sessionCookie } })
     ]);
 
     expect(emails.statusCode).toBe(200);
