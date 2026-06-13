@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../db/client.js';
 
@@ -38,7 +39,7 @@ export const insightRoutes: FastifyPluginAsync = async (app) => {
         kind: body.kind,
         title: body.title,
         body: body.body,
-        metadata: body.metadata ?? {},
+        metadata: (body.metadata ?? {}) as Prisma.InputJsonObject,
       },
     });
     return reply.status(201).send({ data });

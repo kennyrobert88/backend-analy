@@ -42,12 +42,15 @@ export async function getCalendarEvents(
   accountId: string,
   options: { from?: Date; to?: Date } = {}
 ) {
+  const startAt = {
+    ...(options.from !== undefined ? { gte: options.from } : {}),
+    ...(options.to !== undefined ? { lte: options.to } : {}),
+  };
+
   return prisma.calendarEvent.findMany({
     where: {
       accountId,
-      ...(options.from || options.to
-        ? { startAt: { gte: options.from, lte: options.to } }
-        : {}),
+      ...(options.from !== undefined || options.to !== undefined ? { startAt } : {}),
     },
     orderBy: { startAt: 'asc' },
   });

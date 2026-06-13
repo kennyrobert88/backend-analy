@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../db/client.js';
 
@@ -35,7 +36,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
           widgetKey: w.widgetKey,
           enabled: w.enabled,
           position: w.position,
-          settings: w.settings ?? {},
+          settings: (w.settings ?? {}) as Prisma.InputJsonObject,
         })),
       }),
     ]);
