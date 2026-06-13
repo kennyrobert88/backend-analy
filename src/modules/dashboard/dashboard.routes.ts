@@ -1,25 +1,50 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { prisma } from '../../db/client.js';
 
 const widgetSchema = z.object({
-  id: z.string().min(1).max(100),
+  widgetKey: z.string().min(1).max(100),
   enabled: z.boolean(),
-  order: z.number().int().min(0)
+  position: z.number().int().min(0),
+  settings: z.record(z.unknown()).optional(),
 });
 
 const updateWidgetsSchema = z.array(widgetSchema).min(1).max(50);
 
-const defaultWidgets = [
-  { id: 'email-volume', enabled: true, order: 1 },
-  { id: 'top-senders', enabled: true, order: 2 },
-  { id: 'calendar-correlation', enabled: true, order: 3 }
-];
-
 export const dashboardRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/widgets', async () => ({ data: defaultWidgets }));
 
+  // GET /dashboard/widgets
+  app.get('/widgets', async (request) => {
+    const data = await prisma.dashboardWidget.findMany({
+      where: { userId: request.userId },
+      orderBy: { position: 'asc' },
+    });
+    return { data };
+  });
+
+  // PUT /dashboard/widgets — replace the full widget list for this user
   app.put('/widgets', async (request) => {
-    const data = updateWidgetsSchema.parse(request.body);
+    const widgets = updateWidgetsSchema.parse(request.body);
+
+    // Replace all widgets in a single transaction.
+    await prisma.$transaction([
+      prisma.dashboardWidget.deleteMany({ where: { userId: request.userId } }),
+      prisma.dashboardWidget.createMany({
+        data: widgets.map(w => ({
+          userId: request.userId,
+          widgetKey: w.widgetKey,
+          enabled: w.enabled,
+          position: w.position,
+          settings: w.settings ?? {},
+        })),
+      }),
+    ]);
+
+    const data = await prisma.dashboardWidget.findMany({
+      where: { userId: request.userId },
+      orderBy: { position: 'asc' },
+    });
+
     return { data };
   });
 };

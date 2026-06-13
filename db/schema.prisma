@@ -36,15 +36,15 @@ model Account {
 }
 
 model OAuthToken {
-  id                    String   @id @default(cuid())
-  accountId             String   @map("account_id")
-  accessTokenCiphertext  String?  @map("access_token_ciphertext")
-  refreshTokenCiphertext String?  @map("refresh_token_ciphertext")
-  expiresAt             DateTime? @map("expires_at")
-  scope                 String?
-  account               Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
+  id                     String    @id @default(cuid())
+  accountId              String    @unique @map("account_id")
+  accessTokenCiphertext  String?   @map("access_token_ciphertext")
+  refreshTokenCiphertext String?   @map("refresh_token_ciphertext")
+  expiresAt              DateTime? @map("expires_at")
+  scope                  String?
+  account                Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
   @@map("oauth_tokens")
 }
@@ -59,6 +59,9 @@ model Email {
   receivedAt  DateTime?    @map("received_at")
   snippet     String?
   labels      String[]     @default([])
+  category    String?
+  hasAttachments Boolean   @default(false) @map("has_attachments")
+  sizeBytes   Int?         @map("size_bytes")
   account     Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
   body        EmailBody?
   attachments Attachment[]
